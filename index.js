@@ -11,7 +11,7 @@ const bot = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.G
 const { CLIENT_ID, CLIENT_SECRET, BOT_TOKEN, GUILD_ID, ROLE_ID, BLOXLINK_API_KEY, RAILWAY_PUBLIC_URL } = process.env;
 const REDIRECT_URI = `${RAILWAY_PUBLIC_URL}/callback`;
 
-// 1. Automatically forward incoming visitors straight to the Discord OAuth Prompt
+// 1. Forward incoming visitors straight to the Discord OAuth Prompt
 app.get('/', (req, res) => {
     const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
     res.redirect(discordAuthUrl);
@@ -23,7 +23,6 @@ app.get('/callback', async (req, res) => {
     if (!code) return res.status(400).send('Authentication code is missing.');
 
     try {
-        // Exchange Discord Code for Token
         const tokenRes = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
             client_id: CLIENT_ID,
             client_secret: CLIENT_SECRET,
@@ -32,27 +31,23 @@ app.get('/callback', async (req, res) => {
             redirect_uri: REDIRECT_URI,
         }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
 
-        // Fetch User Discord ID
         const userRes = await axios.get('https://discord.com/api/users/@me', {
             headers: { Authorization: `Bearer ${tokenRes.data.access_token}` }
         });
         const discordUserId = userRes.data.id;
 
-        // Fetch user data via Bloxlink's API 
         try {
             await axios.get(`https://api.blox.link/v4/public/guilds/${GUILD_ID}/discord-user/${discordUserId}`, {
                 headers: { Authorization: BLOXLINK_API_KEY }
             });
 
-            // Assign the verification server role
             const guild = await bot.guilds.fetch(GUILD_ID);
             const member = await guild.members.fetch(discordUserId);
             await member.roles.add(ROLE_ID);
         } catch (apiErr) {
-            console.log("User might not be verified on Bloxlink yet, forwarding anyway.");
+            console.log("User not verified on Bloxlink yet, forwarding anyway.");
         }
 
-        // AUTOMATICALLY REDIRECT USER TO BLOX.LINK
         res.redirect('https://blox.link');
 
     } catch (err) {
@@ -61,41 +56,41 @@ app.get('/callback', async (req, res) => {
     }
 });
 
-// 3. Listen for the /verify setup command
+// 3. Listen for the /verify setup command with proper builder integrations
 bot.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'verify') {
         try {
-            // 1. Instantly stop Discord's 3-second timeout clock
+            // Instantly stop Discord's 3-second timeout clock
             await interaction.reply({ content: 'Processing verification setup...', ephemeral: true });
 
-            // 2. Check for Admin permissions
+            // Check for Admin permissions
             if (!interaction.member.permissions.has('Administrator')) {
                 return await interaction.editReply({ content: 'You must be an administrator to use this command.' });
             }
 
-            // 3. Create the Link Button pointing to your Railway URL
+            // Create the Link Button pointing to your Railway URL
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
-                    .setLabel('Verify with Bloxlink') // Updated matching label
+                    .setLabel('Verify with Bloxlink')
                     .setURL(RAILWAY_PUBLIC_URL) 
                     .setStyle(ButtonStyle.Link)
             );
 
-            // 4. Send your custom text cleanly to the channel
+            // Send your custom text cleanly to the channel
             await interaction.channel.send({
                 content: 'Welcome to AM & MM2! Click the button below to Verify with Bloxlink and gain access to the rest of the server!',
                 components: [row]
             });
 
-            // 5. Update our hidden reply
+            // Update our hidden reply
             await interaction.editReply({ content: 'Verification embed successfully posted!' });
 
         } catch (error) {
-            console.error("Error handling /verify command:", error);
+            console.error("Error inside command execution layer:", error);
             try {
-                await interaction.editReply({ content: 'An error occurred while posting the setup embed.' });
+                await interaction.editReply({ content: `An error occurred while posting the setup embed. Error context: ${error.message}` });
             } catch (e) {}
         }
     }
