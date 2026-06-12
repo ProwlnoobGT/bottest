@@ -66,26 +66,38 @@ bot.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'verify') {
-        // Check if the user executing this has Admin permissions
-        if (!interaction.member.permissions.has('Administrator')) {
-            return interaction.reply({ content: 'You must be an administrator to use this command.', ephemeral: true });
+        try {
+            // 1. Instantly stop Discord's 3-second timeout clock
+            await interaction.reply({ content: 'Processing verification setup...', ephemeral: true });
+
+            // 2. Check for Admin permissions
+            if (!interaction.member.permissions.has('Administrator')) {
+                return await interaction.editReply({ content: 'You must be an administrator to use this command.' });
+            }
+
+            // 3. Create the Link Button pointing to your Railway URL
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('Verify with Bloxlink') // Updated matching label
+                    .setURL(RAILWAY_PUBLIC_URL) 
+                    .setStyle(ButtonStyle.Link)
+            );
+
+            // 4. Send your custom text cleanly to the channel
+            await interaction.channel.send({
+                content: 'Welcome to AM & MM2! Click the button below to Verify with Bloxlink and gain access to the rest of the server!',
+                components: [row]
+            });
+
+            // 5. Update our hidden reply
+            await interaction.editReply({ content: 'Verification embed successfully posted!' });
+
+        } catch (error) {
+            console.error("Error handling /verify command:", error);
+            try {
+                await interaction.editReply({ content: 'An error occurred while posting the setup embed.' });
+            } catch (e) {}
         }
-
-        // Create the Link Button pointing to your Railway URL
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setLabel('Verify Identity')
-                .setURL(RAILWAY_PUBLIC_URL) // Points directly to your server entry point
-                .setStyle(ButtonStyle.Link)
-        );
-
-        // Send the permanent message with the button underneath
-        await interaction.channel.send({
-            content: '### You can verify with this button\nClick the button below to authorize the application and complete your verification registration profile.',
-            components: [row]
-        });
-
-        await interaction.reply({ content: 'Verification embed successfully posted!', ephemeral: true });
     }
 });
 
